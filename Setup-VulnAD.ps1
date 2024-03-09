@@ -13,6 +13,7 @@ $Global:NetBIOSName = "VULNAD"
 $Global:DomainAdminUsername = "DomainAdmin"
 $Global:DomainAdminPassword = "Password321$"
 $Global:SafeModePassword = "SafeModePassword#"
+$Global:DCHostname = "DC01"
 #Strings 
 $Global:Spacing = "`t"
 $Global:PlusLine = "`t[+]"
@@ -232,17 +233,32 @@ function Invoke-VulnAD {
 
     if (-not $adInstalled.Installed) {
         Write-Host "Installing Active Directory Domain Services"
+       
         # Install the required Active Directory Domain Services (AD DS) feature
         Install-WindowsFeature -Name AD-Domain-Services -IncludeManagementTools
-
+        Import-Module ADDSDeployment
         # Promote the server to a domain controller
         Install-ADDSForest `
             -DomainName $Global:Domain `
             -DomainNetBIOSName $Global.NetBIOSName `
             -SafeModeAdministratorPassword (ConvertTo-SecureString -String $Global:SafeModePassword -AsPlainText -Force) `
             -Force:$true `
-            -Credential (New-Object System.Management.Automation.PSCredential ($Global:DomainAdminUsername, (ConvertTo-SecureString $Global:DomainAdminPassword -AsPlainText -Force))) `
-            -Confirm:$false
+            -Confirm:$false `
+            -CreateDnsDelegation:$false `
+            -DatabasePath "C:\\Windows\\NTDS" `
+            -DomainMode "7" `
+            -ForestMode "7" `
+            -InstallDns:$true `
+            -LogPath "C:\\Windows\\NTDS" `
+            -NoRebootOnCompletion:$false `
+            -SysvolPath "C:\\Windows\\SYSVOL"
+
+            Write-Good "The domain $Global:Domain has been created."
+            Write-Good "The server will reboot"
+            Write-Good "You can login as $Global:NetBIOSName\\$(whoami)"
+            
+            #Finish the script, as a reboot will be performed to create the AD Environment
+            exit
     }
     Set-ADDefaultDomainPasswordPolicy -Identity $Global:Domain -LockoutDuration 00:01:00 -LockoutObservationWindow 00:01:00 -ComplexityEnabled $false -ReversibleEncryptionEnabled $False -MinPasswordLength 4
     VulnAD-AddADUser -limit $UsersLimit
@@ -271,4 +287,6 @@ function Invoke-VulnAD {
     Write-Good "DCSync Done"
     VulnAD-DisableSMBSigning
     Write-Good "SMB Signing Disabled"
+    Write-Info "Renaming the server as $Global:DCHostname"
+    Rename-Computer -NewName $Global:DCHostname -Restart
 }
