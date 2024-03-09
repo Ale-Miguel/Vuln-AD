@@ -9,6 +9,10 @@ $Global:ServicesAccountsAndSPNs = @('mssql_svc,mssqlserver','http_svc,httpserver
 $Global:CreatedUsers = @();
 $Global:AllObjects = @();
 $Global:Domain = "";
+$Global:NetBIOSName = "VULNAD"
+$Global:DomainAdminUsername = "DomainAdmin"
+$Global:DomainAdminPassword = "Password321$"
+$Global:SafeModePassword = "SafeModePassword#"
 #Strings 
 $Global:Spacing = "`t"
 $Global:PlusLine = "`t[+]"
@@ -224,6 +228,22 @@ function Invoke-VulnAD {
     )
     ShowBanner
     $Global:Domain = $DomainName
+    $adInstalled = Get-WindowsFeature AD-Domain-Services
+
+    if (-not $adInstalled.Installed) {
+        Write-Host "Installing Active Directory Domain Services"
+        # Install the required Active Directory Domain Services (AD DS) feature
+        Install-WindowsFeature -Name AD-Domain-Services -IncludeManagementTools
+
+        # Promote the server to a domain controller
+        Install-ADDSForest `
+            -DomainName $Global:Domain `
+            -DomainNetBIOSName $Global.NetBIOSName `
+            -SafeModeAdministratorPassword (ConvertTo-SecureString -String $Global:SafeModePassword -AsPlainText -Force) `
+            -Force:$true `
+            -Credential (New-Object System.Management.Automation.PSCredential ($Global:DomainAdminUsername, (ConvertTo-SecureString $Global:DomainAdminPassword -AsPlainText -Force))) `
+            -Confirm:$false
+    }
     Set-ADDefaultDomainPasswordPolicy -Identity $Global:Domain -LockoutDuration 00:01:00 -LockoutObservationWindow 00:01:00 -ComplexityEnabled $false -ReversibleEncryptionEnabled $False -MinPasswordLength 4
     VulnAD-AddADUser -limit $UsersLimit
     Write-Good "Users Created"
