@@ -287,6 +287,7 @@ function Invoke-VulnAD {
     Write-Good "DCSync Done"
     VulnAD-DisableSMBSigning
     Write-Good "SMB Signing Disabled"
+    
     Write-Info "Renaming the server as $Global:DCHostname"
     Rename-Computer -NewName $Global:DCHostname -Restart
 }
